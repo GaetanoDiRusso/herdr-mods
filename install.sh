@@ -40,12 +40,11 @@ say()  { printf '%s\n' "$*"; }
 warn() { printf '! %s\n' "$*"; WARN=1; }
 run()  { [ $DRY = 1 ] || "$@"; }  # in dry-run, the + / ~ lines already say what it would do
 
-# Find a binary on PATH or in ~/.local/bin (where each installer puts it).
+# Find a binary in ~/.local/bin (where each installer puts it, and first on
+# Herdr's PATH) or else on the shell's PATH.
 find_bin() {
-  local p
-  p="$(command -v "$1" 2>/dev/null || true)"
-  [ -z "$p" ] && [ -x "$BIN/$1" ] && p="$BIN/$1"
-  printf '%s' "$p"
+  if [ -x "$BIN/$1" ]; then printf '%s' "$BIN/$1"; return; fi
+  command -v "$1" 2>/dev/null || true
 }
 
 # install_file <source> <destination> [mode]
@@ -187,14 +186,29 @@ if [ $ADMIN = 1 ]; then
   elif "$HC" get admin >/dev/null 2>&1; then
     warn "there is an 'admin' terminal in hc but no Admin space: check with 'hc get admin'"
   elif [ $DRY = 1 ]; then
+    [ -d "$ADMIN_DIR" ] || say "  + ${ADMIN_DIR/#$HOME/~} (Admin's folder)"
     say "  (dry-run) space.new Admin in $ADMIN_DIR + hc run admin (template admin) + Admin tab"
+  elif [ -e "$ADMIN_DIR" ] && [ ! -d "$ADMIN_DIR" ]; then
+    warn "$ADMIN_DIR exists but is not a folder: pick another one with --admin-dir"
   else
-    NEW="$("$HERDR_APP" do space.new --name Admin --folder "$ADMIN_DIR")"
+    if [ ! -d "$ADMIN_DIR" ]; then
+      say "  + ${ADMIN_DIR/#$HOME/~} (Admin's folder)"
+      mkdir -p "$ADMIN_DIR"
+    fi
+    ADMIN_DIR="$(cd "$ADMIN_DIR" && pwd)"
+    if ! NEW="$("$HERDR_APP" do space.new --name Admin --folder "$ADMIN_DIR" 2>&1)"; then
+      say "✗ could not create the Admin space:"; printf '%s\n' "$NEW" | sed 's/^/    /'; exit 1
+    fi
     SP="$(printf '%s' "$NEW" | "$PY" -c 'import json,sys;print(json.load(sys.stdin)["space"])')"
     TAB0="$(printf '%s' "$NEW" | "$PY" -c 'import json,sys;print(json.load(sys.stdin)["tab"])')"
     T0="$(printf '%s' "$NEW" | "$PY" -c 'import json,sys;print(json.load(sys.stdin)["terminal"])')"
-    OUT="$("$HC" run --bg --no-parent --name admin --cwd "$ADMIN_DIR" --label herdr.space="$SP" \
-      admin "Space id: $SP. Folder: $ADMIN_DIR.")"
+    if ! OUT="$("$HC" run --bg --no-parent --name admin --cwd "$ADMIN_DIR" --label herdr.space="$SP" \
+      admin "Space id: $SP. Folder: $ADMIN_DIR." 2>&1)"; then
+      say "✗ the Admin space ($SP) was created, but its agent could not start:"
+      printf '%s\n' "$OUT" | sed 's/^/    /'
+      say "  Fix it and close that space, then run ./install.sh --admin again."
+      exit 1
+    fi
     T="$(printf '%s' "$OUT" | "$PY" -c 'import json,sys;print(json.load(sys.stdin)["address"])')"
     "$HC" wait "$T" --timeout 10 >/dev/null 2>&1 || true
     TAB="$("$HERDR_APP" ls | "$PY" -c 'import json,sys

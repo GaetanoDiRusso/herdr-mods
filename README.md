@@ -69,10 +69,10 @@ Options:
 - `--dry-run`: lists what it would create (`+`) or replace (`~`), without touching anything.
 - `--admin`: creates the `Admin` space with its agent (template `admin`,
   pausable) if it does not exist. Needs the app open.
-- `--admin-dir <folder>`: Admin's folder (default: `~`). Claude Code does not
-  remember trust for the home folder, so in `~` the "trust this folder?" dialog
-  comes back on every start. A folder of its own (e.g. `~/herdr-admin`) asks
-  only once.
+- `--admin-dir <folder>`: Admin's folder (default: `~`; created if missing).
+  Claude Code does not remember trust for the home folder, so in `~` the "trust
+  this folder?" dialog comes back on every start. A folder of its own (e.g.
+  `~/herdr-admin`) asks only once.
 - `--no-app`: does not talk to the app (no layout switch, no Admin).
 
 It is idempotent: whatever is already identical is skipped, and anything
